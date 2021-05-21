@@ -16,6 +16,7 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -43,6 +44,14 @@ type Config struct {
 	// RoundTripper is used by the Client to drive HTTP requests. If not
 	// provided, DefaultRoundTripper will be used.
 	RoundTripper http.RoundTripper
+
+	// BasicAuth enables basic auth for client requests
+	BasicAuth bool
+
+	// Username for the basic auth
+	Username string
+	// Password for the basic auth
+	Password string
 }
 
 func (cfg *Config) roundTripper() http.RoundTripper {
@@ -68,15 +77,35 @@ func NewClient(cfg Config) (Client, error) {
 	}
 	u.Path = strings.TrimRight(u.Path, "/")
 
+	basicAuth := BasicAuth{Enabled: false}
+
+	if cfg.BasicAuth {
+		if basicAuth.Username == "" || basicAuth.Password == "" {
+			return nil, fmt.Errorf("invalid config: credentials not present for basic auth")
+		}
+
+		basicAuth.Enabled = true
+		basicAuth.Username = cfg.Username
+		basicAuth.Password = cfg.Password
+	}
+
 	return &httpClient{
-		endpoint: u,
-		client:   http.Client{Transport: cfg.roundTripper()},
+		endpoint:  u,
+		client:    http.Client{Transport: cfg.roundTripper()},
+		basicAuth: basicAuth,
 	}, nil
 }
 
 type httpClient struct {
-	endpoint *url.URL
-	client   http.Client
+	endpoint  *url.URL
+	client    http.Client
+	basicAuth BasicAuth
+}
+
+type BasicAuth struct {
+	Enabled  bool
+	Username string
+	Password string
 }
 
 func (c *httpClient) URL(ep string, args map[string]string) *url.URL {
@@ -97,6 +126,11 @@ func (c *httpClient) Do(ctx context.Context, req *http.Request) (*http.Response,
 	if ctx != nil {
 		req = req.WithContext(ctx)
 	}
+
+	if c.basicAuth.Enabled {
+		req.SetBasicAuth(c.basicAuth.Username, c.basicAuth.Password)
+	}
+
 	resp, err := c.client.Do(req)
 	defer func() {
 		if resp != nil {
