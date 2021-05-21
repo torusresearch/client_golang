@@ -80,7 +80,7 @@ func NewClient(cfg Config) (Client, error) {
 	basicAuth := BasicAuth{Enabled: false}
 
 	if cfg.BasicAuth {
-		if basicAuth.Username == "" || basicAuth.Password == "" {
+		if cfg.Username == "" || cfg.Password == "" {
 			return nil, fmt.Errorf("invalid config: credentials not present for basic auth")
 		}
 
